@@ -8,6 +8,9 @@ services:
         WAZUH_TAG_REVISION: ${WAZUH_TAG_REVISION}
         FILEBEAT_TEMPLATE_BRANCH: ${FILEBEAT_TEMPLATE_BRANCH}
         WAZUH_FILEBEAT_MODULE: ${WAZUH_FILEBEAT_MODULE}
+      platforms:
+        - linux/amd64
+        - linux/arm64
     image: wazuh/wazuh-manager:${WAZUH_IMAGE_VERSION}
     hostname: wazuh.manager
     restart: always

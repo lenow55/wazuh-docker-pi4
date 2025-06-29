@@ -1,8 +1,10 @@
 # Wazuh Docker Copyright (C) 2017, Wazuh Inc. (License GPLv2)
-FROM amazonlinux:2023
+# syntax=docker/dockerfile:1.4
 
-RUN rm /bin/sh && ln -s /bin/bash /bin/sh
+# --- 1. ПОДГОТОВКА ОБЩЕГО БАЗОВОГО СЛОЯ ---
+FROM amazonlinux:2023 AS base-builder
 
+ARG TARGETARCH
 ARG WAZUH_VERSION
 ARG WAZUH_TAG_REVISION
 ARG FILEBEAT_TEMPLATE_BRANCH
@@ -11,26 +13,46 @@ ARG FILEBEAT_VERSION=7.10.2
 ARG WAZUH_FILEBEAT_MODULE
 ARG S6_VERSION="v2.2.0.3"
 
-RUN yum install curl-minimal xz gnupg tar gzip openssl findutils procps -y &&\
-    yum clean all
+RUN rm /bin/sh && ln -s /bin/bash /bin/sh && \
+  yum install curl-minimal xz gnupg tar gzip openssl findutils procps -y &&\
+  yum clean all
 
 COPY config/check_repository.sh /
-COPY config/filebeat_module.sh /
 COPY config/permanent_data.env config/permanent_data.sh /
 
 RUN chmod 775 /check_repository.sh
 RUN source /check_repository.sh
 
+# --- 2. СТАДИИ ДЛЯ КАЖДОЙ АРХИТЕКТУРЫ ---
+FROM base-builder AS builder-amd64
+
+COPY config/filebeat_module_amd64.sh /filebeat_module.sh
+
+RUN chmod 775 /filebeat_module.sh && \
+  source /filebeat_module.sh && \
+  rm /filebeat_module.sh && \
+  curl --fail --silent -L https://github.com/just-containers/s6-overlay/releases/download/${S6_VERSION}/s6-overlay-amd64.tar.gz \
+  -o /tmp/s6-overlay.tar.gz
+
+FROM base-builder AS builder-arm64
+
+COPY config/filebeat_module_arm64.sh /filebeat_module.sh
+
+RUN chmod 775 /filebeat_module.sh && \
+  source /filebeat_module.sh && \
+  rm /filebeat_module.sh && \
+  curl --fail --silent -L https://github.com/just-containers/s6-overlay/releases/download/${S6_VERSION}/s6-overlay-aarch64.tar.gz \
+  -o /tmp/s6-overlay.tar.gz
+
+# --- 3. ФИНАЛЬНЫЙ ЭТАП: ВЫБОР ПО TARGETARCH ---
+FROM builder-${TARGETARCH} AS final
+
+
 RUN yum install wazuh-manager-${WAZUH_VERSION}-${WAZUH_TAG_REVISION} -y && \
-    yum clean all && \
-    chmod 775 /filebeat_module.sh && \
-    source /filebeat_module.sh && \
-    rm /filebeat_module.sh && \
-    curl --fail --silent -L https://github.com/just-containers/s6-overlay/releases/download/${S6_VERSION}/s6-overlay-amd64.tar.gz \
-    -o /tmp/s6-overlay-amd64.tar.gz && \
-    tar xzf /tmp/s6-overlay-amd64.tar.gz -C / --exclude="./bin" && \
-    tar xzf /tmp/s6-overlay-amd64.tar.gz -C /usr ./bin && \
-    rm  /tmp/s6-overlay-amd64.tar.gz
+  yum clean all && \
+  tar xzf /tmp/s6-overlay.tar.gz -C / --exclude="./bin" && \
+  tar xzf /tmp/s6-overlay.tar.gz -C /usr ./bin && \
+  rm  /tmp/s6-overlay.tar.gz
 
 COPY config/etc/ /etc/
 COPY --chown=root:wazuh config/create_user.py /var/ossec/framework/scripts/create_user.py
@@ -48,17 +70,17 @@ RUN chmod go-w /etc/filebeat/wazuh-template.json
 #Make mount directories for keep permissions
 
 RUN mkdir -p /var/ossec/var/multigroups && \
-    chown root:wazuh /var/ossec/var/multigroups && \
-    chmod 770 /var/ossec/var/multigroups && \
-    mkdir -p /var/ossec/agentless && \
-    chown root:wazuh /var/ossec/agentless && \
-    chmod 770 /var/ossec/agentless && \
-    mkdir -p /var/ossec/active-response/bin && \
-    chown root:wazuh /var/ossec/active-response/bin && \
-    chmod 770 /var/ossec/active-response/bin && \
-    chmod 755 /permanent_data.sh && \
-    sync && /permanent_data.sh && \
-    sync && rm /permanent_data.sh
+  chown root:wazuh /var/ossec/var/multigroups && \
+  chmod 770 /var/ossec/var/multigroups && \
+  mkdir -p /var/ossec/agentless && \
+  chown root:wazuh /var/ossec/agentless && \
+  chmod 770 /var/ossec/agentless && \
+  mkdir -p /var/ossec/active-response/bin && \
+  chown root:wazuh /var/ossec/active-response/bin && \
+  chmod 770 /var/ossec/active-response/bin && \
+  chmod 755 /permanent_data.sh && \
+  sync && /permanent_data.sh && \
+  sync && rm /permanent_data.sh
 
 RUN rm /etc/yum.repos.d/wazuh.repo
 
