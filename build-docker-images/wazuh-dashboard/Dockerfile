@@ -1,5 +1,5 @@
 # Wazuh Docker Copyright (C) 2017, Wazuh Inc. (License GPLv2)
-FROM amazonlinux:2023 AS builder
+FROM amazonlinux:2 AS builder
 
 ARG WAZUH_VERSION
 ARG WAZUH_TAG_REVISION
@@ -36,7 +36,7 @@ RUN bash config.sh
 # Add entrypoint
 # Add wazuh_app_config
 ################################################################################
-FROM amazonlinux:2023
+FROM amazonlinux:2
 
 # Set environment variables
 ENV USER="wazuh-dashboard" \

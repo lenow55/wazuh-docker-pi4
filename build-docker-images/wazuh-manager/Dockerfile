@@ -2,7 +2,7 @@
 # syntax=docker/dockerfile:1.4
 
 # --- 1. ПОДГОТОВКА ОБЩЕГО БАЗОВОГО СЛОЯ ---
-FROM amazonlinux:2023 AS base-builder
+FROM amazonlinux:2 AS base-builder
 
 ARG TARGETARCH
 ARG WAZUH_VERSION
